@@ -10,7 +10,6 @@ dataPatente = []
 def code(archive):
     with open(archive, 'rb') as f:
         result = chardet.detect(f.read())
-        print('ARQUIVO CODIFICADO PARA LEITURA')
     return result['encoding']
 
 def getData(archive):
@@ -21,32 +20,34 @@ def getData(archive):
 
         archiveName = os.path.basename(archive)
 
-        cnpjTag = soup.find(text='CNPJ:')
-        cnpj = cnpjTag.find_next().get_text(strip=True) if cnpjTag else 'NENHUM ITEM ENCONTRADO'
+        cnpj = 'NENHUM ITEM ENCONTRADO'
+        cnpjTag = soup.find('div', id='tituloEResumoContext')
+        if cnpjTag:
+            cnpjFont = cnpjTag.find('font', class_='normal')
+            if cnpjFont and 'CPF ou CNPJ do Depositante:' in cnpjFont.get_text(strip=True):
+                cnpjText = cnpjFont.get_text(strip=True)
+                cnpj = cnpjText.split(': ')[1].strip()
 
-        resultadoTag = soup.find(text='Resultado:')
-        resultadoText = resultadoTag.find_next().get_text(strip=True) if resultadoTag else '0'
-        resultado = int(resultadoText.split()[0]) if resultadoText.split()[0].isdigit() else 0
+        resultado = 0
+        resultadoTag = soup.find('font', class_='normal')
+        if resultadoTag:
+            text = resultadoTag.get_text(strip=True)
+            if 'Foram encontrados' in text:
+                i = text.index('Foram encontrados') + len('Foram encontrados')
+                iFim = text.index('processos')
+                resultadoText = text[i:iFim].strip()
+                resultado = int(resultadoText) if resultadoText.isdigit() else 0
 
-        if resultado == 0:
-            dataPatente.append([archiveName, cnpj, resultado, '-', '-', '-', '-'])
-        else:
-            rowPatente = soup.find_all('tr', {'class': 'patente'})
-            for row in rowPatente:
-                numero_pedido = row.find('td', {'class': 'numero_pedido'}).get_text(strip=True)
-                data_deposito = row.find('td', {'class': 'data_deposito'}).get_text(strip=True)
-                titulo = row.find('td', {'class': 'titulo'}).get_text(strip=True)
-                ipc = row.find('td', {'class': 'ipc'}).get_text(strip=True)
-                dataPatente.append([archiveName, cnpj, resultado, numero_pedido, data_deposito, titulo, ipc])
+        dataPatente.append([archiveName, cnpj, resultado])
 
 for archive in os.listdir(pathPatentes):
     if archive.endswith('.html'):
         pathArchive = os.path.join(pathPatentes, archive)
         getData(pathArchive)
 
-columns = ['Arquivo', 'CNPJ', 'RESULTADO', 'NÚMERO DO PEDIDO', 'Data do Depósito', 'Título', 'IPC']
+columns = ['Arquivo', 'CNPJ', 'RESULTADO']
 df = pd.DataFrame(dataPatente, columns=columns)
 
 df.to_html('PATENTES.HTML', index=False, justify='center')
 
-print("DADOS EXTRAIDOS.")
+print("DADOS COLETADOS")
